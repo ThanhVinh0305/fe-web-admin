@@ -1,0 +1,75 @@
+name: 🚀 Deploy React-Vite Web-admin app
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      # 1️⃣ Lấy source
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+
+      # 2️⃣ Thiết lập Node.js
+      - name: ⚙️ Set up Node.js environment
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      # 3️⃣ Cài đặt dependencies
+      - name: 📦 Install dependencies (Yarn)
+        run: yarn install --frozen-lockfile
+
+      # 4️⃣ Build project
+      - name: 🛠️ Build project with Vite (Yarn)
+        run: |
+          echo "🔨 Building project..."
+          yarn build
+          echo "✅ Build completed successfully."
+
+      # 5️⃣ Kiểm tra & chuẩn bị thư mục trên server
+      - name: 🧹 Prepare server folder for deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT }}
+          username: abp-server4
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+          timeout: 500s
+          command_timeout: 20m
+          debug: true
+
+          script: |
+            echo "🛰️ Kết nối SSH thành công!"
+            echo "📁 Kiểm tra thư mục nginx..."
+            ls -la /usr/share/nginx || echo "⚠️ Thư mục nginx chưa tồn tại!"
+            echo "🧹 Xóa thư mục cũ..."
+            rm -rf /usr/share/nginx/web-admin || echo "⚠️ Không thể xóa (có thể chưa tồn tại)"
+            echo "📂 Tạo thư mục mới..."
+            mkdir -p /usr/share/nginx/web-admin
+            echo "✅ Server folder đã được chuẩn bị xong."
+
+      # 6️⃣ Upload build files
+      - name: 🚀 Upload dist to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT }}
+          username: abp-server4
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+          source: 'dist/**'
+          target: '/usr/share/nginx/web-admin'
+          strip_components: 1
+          timeout: 180s
+          debug: true
+
+      # 7️⃣ Thông báo hoàn thành
+      - name: ✅ Deployment Finished
+        run: echo "🎉 Deployment completed successfully to ${{ secrets.SERVER_HOST }}"
